@@ -280,6 +280,7 @@ func (e *HashJoinExec) waitJoinWorkersAndCloseResultChan() {
 func (e *HashJoinExec) runJoinWorker(workerID int) {
 	bufferCapacity := 1024
 	resultBuffer := &execResult{rows: make([]Row, 0, bufferCapacity)}
+	outerFilterResult := make([]bool, 0, bufferCapacity)
 
 	var outerBuffer *execResult
 	for ok := true; ok; {
@@ -297,7 +298,37 @@ func (e *HashJoinExec) runJoinWorker(workerID int) {
 			break
 		}
 
+		outerFilterResult := outerFilterResult[:0]
 		for _, outerRow := range outerBuffer.rows {
+			matched, err := expression.EvalBool(e.outerFilter, outerRow, e.ctx)
+			if err != nil {
+				resultBuffer.err = errors.Trace(err)
+				break
+			}
+			outerFilterResult = append(outerFilterResult, matched)
+		}
+
+		for i, j := 0, len(outerFilterResult)-1; i < j; {
+			for i < j && outerFilterResult[i] == true {
+				i++
+			}
+			for i < j && outerFilterResult[j] == false {
+				j--
+			}
+			if i < j && outerFilterResult[i] == false && outerFilterResult[j] == true {
+				outerFilterResult[i], outerFilterResult[j] = outerFilterResult[j], outerFilterResult[i]
+				outerBuffer.rows[i], outerBuffer.rows[j] = outerBuffer.rows[j], outerBuffer.rows[i]
+				i++
+				j--
+			}
+		}
+		numMatchedOuters, numOuters := 0, len(outerFilterResult)
+		for numMatchedOuters < numOuters && outerFilterResult[numMatchedOuters] == true {
+			numMatchedOuters++
+		}
+
+		resultBuffer.rows = e.resultGenerator.emitUnMatchedOuters(outerBuffer.rows[numMatchedOuters:], resultBuffer.rows)
+		for _, outerRow := range outerBuffer.rows[:numMatchedOuters] {
 			ok = e.joinOuterRow(workerID, outerRow, resultBuffer)
 			if !ok {
 				break
@@ -319,16 +350,6 @@ func (e *HashJoinExec) runJoinWorker(workerID int) {
 // Every matching row generates a result row.
 // If there are no matching rows and it is outer join, a null filled result row is created.
 func (e *HashJoinExec) joinOuterRow(workerID int, outerRow Row, resultBuffer *execResult) bool {
-	matched, err := expression.EvalBool(e.outerFilter, outerRow, e.ctx)
-	if err != nil {
-		resultBuffer.err = errors.Trace(err)
-		return false
-	}
-	if !matched {
-		resultBuffer.rows = e.resultGenerator.emitUnMatchedOuter(outerRow, resultBuffer.rows)
-		return true
-	}
-
 	buffer := e.hashJoinBuffers[workerID]
 	hasNull, joinKey, err := getJoinKey(e.outerKeys, outerRow, buffer.data, buffer.bytes[:0:cap(buffer.bytes)])
 	if err != nil {
@@ -357,6 +378,7 @@ func (e *HashJoinExec) joinOuterRow(workerID int, outerRow Row, resultBuffer *ex
 		innerRows = append(innerRows, innerRow)
 	}
 
+	matched := false
 	resultBuffer.rows, matched, err = e.resultGenerator.emitMatchedInners(outerRow, innerRows, resultBuffer.rows)
 	if err != nil {
 		resultBuffer.err = errors.Trace(err)
