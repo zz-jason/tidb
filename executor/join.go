@@ -22,7 +22,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/expression"
-	"github.com/pingcap/tidb/tablecodec"
 	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/codec"
@@ -48,6 +47,7 @@ type HashJoinExec struct {
 	outerKeys   []*expression.Column
 	innerKeys   []*expression.Column
 
+	innerRowBuffer  []Row
 	prepared        bool
 	concurrency     int // concurrency is number of concurrent channels and join workers.
 	hashTable       *mvmap.MVMap
@@ -82,6 +82,7 @@ func (e *HashJoinExec) Close() error {
 		<-e.closeCh
 	}
 
+	e.innerRowBuffer = nil
 	e.resultBuffer = nil
 
 	return nil
@@ -98,6 +99,7 @@ func (e *HashJoinExec) Open() error {
 	}
 
 	e.prepared = false
+	e.innerRowBuffer = make([]Row, 0, 1024)
 
 	e.hashJoinBuffers = make([]*hashJoinBuffer, 0, e.concurrency)
 	for i := 0; i < e.concurrency; i++ {
@@ -230,11 +232,10 @@ func (e *HashJoinExec) prepare() error {
 			continue
 		}
 
+		e.innerRowBuffer = append(e.innerRowBuffer, innerRow)
+
 		buffer = buffer[:0]
-		buffer, err = e.encodeRow(buffer, innerRow)
-		if err != nil {
-			return errors.Trace(err)
-		}
+		buffer = codec.EncodeInt(buffer, int64(len(e.innerRowBuffer)-1))
 
 		e.hashTable.Put(joinKey, buffer)
 	}
@@ -249,31 +250,6 @@ func (e *HashJoinExec) prepare() error {
 
 	e.prepared = true
 	return nil
-}
-
-func (e *HashJoinExec) encodeRow(b []byte, row Row) ([]byte, error) {
-	loc := e.ctx.GetSessionVars().GetTimeZone()
-	for _, datum := range row {
-		tmp, err := tablecodec.EncodeValue(datum, loc)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		b = append(b, tmp...)
-	}
-	return b, nil
-}
-
-func (e *HashJoinExec) decodeRow(data []byte) (Row, error) {
-	values := make([]types.Datum, e.innerlExec.Schema().Len())
-	err := codec.SetRawValues(data, values)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	err = decodeRawValues(values, e.innerlExec.Schema(), e.ctx.GetSessionVars().GetTimeZone())
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return values, nil
 }
 
 func (e *HashJoinExec) waitJoinWorkersAndCloseResultChan() {
@@ -376,12 +352,12 @@ func (e *HashJoinExec) joinOuterRow(workerID int, outerRow Row, resultBuffer *ex
 
 	innerRows := make([]Row, 0, len(values))
 	for _, value := range values {
-		innerRow, err := e.decodeRow(value)
+		_, innerID, err := codec.DecodeInt(value)
 		if err != nil {
 			resultBuffer.err = errors.Trace(err)
 			return false
 		}
-		innerRows = append(innerRows, innerRow)
+		innerRows = append(innerRows, e.innerRowBuffer[innerID])
 	}
 
 	matched := false
