@@ -317,16 +317,31 @@ type innerJoinResultGenerator struct {
 	baseJoinResultGenerator
 }
 
+func makeJoinRowToBuffer(buffer []types.Datum, lhs, rhs Row) ([]types.Datum, Row) {
+	buffer = append(buffer, lhs...)
+	buffer = append(buffer, rhs...)
+	return buffer[len(buffer):], buffer[:len(buffer)]
+}
+
 // emitMatchedInners implements joinResultGenerator interface.
 func (outputer *innerJoinResultGenerator) emitMatchedInners(outer Row, inners []Row, resultBuffer []Row) ([]Row, bool, error) {
+	if len(inners) == 0 {
+		return resultBuffer, false, nil
+	}
+
+	buffer := make([]types.Datum, 0, (len(outer)+len(inners[0]))*len(inners))
 	originLen := len(resultBuffer)
 	if outputer.outerIsRight {
+		var joinedRow Row
 		for _, inner := range inners {
-			resultBuffer = append(resultBuffer, makeJoinRow(inner, outer))
+			buffer, joinedRow = makeJoinRowToBuffer(buffer, inner, outer)
+			resultBuffer = append(resultBuffer, joinedRow)
 		}
 	} else {
+		var joinedRow Row
 		for _, inner := range inners {
-			resultBuffer = append(resultBuffer, makeJoinRow(outer, inner))
+			buffer, joinedRow = makeJoinRowToBuffer(buffer, outer, inner)
+			resultBuffer = append(resultBuffer, joinedRow)
 		}
 	}
 
