@@ -14,9 +14,11 @@
 package executor
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/expression"
@@ -87,6 +89,10 @@ func (e *HashJoinExec) Close() error {
 
 // Open implements the Executor Open interface.
 func (e *HashJoinExec) Open() error {
+	newMaxCPUs := runtime.NumCPU()
+	oldMaxCPUs := runtime.GOMAXPROCS(newMaxCPUs)
+	log.Infof("change GOMAXPROCS(%v) to %v\n", oldMaxCPUs, newMaxCPUs)
+
 	if err := e.baseExecutor.Open(); err != nil {
 		return errors.Trace(err)
 	}
