@@ -14,11 +14,9 @@
 package executor
 
 import (
-	"runtime"
 	"sync"
 	"sync/atomic"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/terror"
@@ -89,10 +87,6 @@ func (e *HashJoinExec) Close() error {
 
 // Open implements the Executor Open interface.
 func (e *HashJoinExec) Open() error {
-	newMaxCPUs := runtime.NumCPU()
-	oldMaxCPUs := runtime.GOMAXPROCS(newMaxCPUs)
-	log.Infof("change GOMAXPROCS(%v) to %v\n", oldMaxCPUs, newMaxCPUs)
-
 	if err := e.baseExecutor.Open(); err != nil {
 		return errors.Trace(err)
 	}
@@ -160,10 +154,9 @@ func (e *HashJoinExec) fetchOuterRows() {
 	}()
 
 	bufferCapacity, maxBufferCapacity := 1, 128
-	outerBuffer := &execResult{rows: make([]Row, 0, bufferCapacity)}
-
 	for i, noMoreData := 0, false; !noMoreData; i = (i + 1) % e.concurrency {
-		sequentialDatums := make([]types.Datum, 0, e.outerExec.Schema().Len()*bufferCapacity)
+		outerBuffer := &execResult{rows: make([]Row, 0, bufferCapacity)}
+
 		for !noMoreData && len(outerBuffer.rows) < bufferCapacity {
 			if e.finished.Load().(bool) {
 				return
@@ -176,8 +169,6 @@ func (e *HashJoinExec) fetchOuterRows() {
 				break
 			}
 
-			sequentialDatums = append(sequentialDatums, outerRow...)
-			outerRow = sequentialDatums[len(sequentialDatums)-e.outerExec.Schema().Len():]
 			outerBuffer.rows = append(outerBuffer.rows, outerRow)
 		}
 
@@ -189,11 +180,8 @@ func (e *HashJoinExec) fetchOuterRows() {
 		case <-e.ctx.GoCtx().Done():
 			return
 		case e.outerBufferChs[i] <- outerBuffer:
-			if !noMoreData {
-				if bufferCapacity < maxBufferCapacity {
-					bufferCapacity <<= 1
-				}
-				outerBuffer = &execResult{rows: make([]Row, 0, bufferCapacity)}
+			if !noMoreData && bufferCapacity < maxBufferCapacity {
+				bufferCapacity <<= 1
 			}
 		}
 	}
@@ -208,8 +196,8 @@ func (e *HashJoinExec) prepare() error {
 
 	e.hashTable = mvmap.NewMVMap()
 	e.resultCursor = 0
-	encodedID := make([]byte, 0, 8)
-	sequentialDatums := make([]types.Datum, 0, e.innerlExec.Schema().Len()*1024) // 1024: expected inner row count
+	var buffer []byte
+	sequentialDatums := make([]types.Datum, 0, e.innerlExec.Schema().Len()*1024)
 	for {
 		innerRow, err := e.innerlExec.Next()
 		if err != nil {
@@ -236,13 +224,13 @@ func (e *HashJoinExec) prepare() error {
 		}
 
 		sequentialDatums = append(sequentialDatums, innerRow...)
-		innerRow = sequentialDatums[len(sequentialDatums)-e.innerlExec.Schema().Len():]
-		e.innerRowBuffer = append(e.innerRowBuffer, innerRow)
+		e.innerRowBuffer = append(e.innerRowBuffer, sequentialDatums)
+		sequentialDatums = sequentialDatums[len(sequentialDatums):]
 
-		encodedID = encodedID[:0]
-		encodedID = codec.EncodeInt(encodedID, int64(len(e.innerRowBuffer)-1))
+		buffer = buffer[:0]
+		buffer = codec.EncodeInt(buffer, int64(len(e.innerRowBuffer)-1))
 
-		e.hashTable.Put(joinKey, encodedID)
+		e.hashTable.Put(joinKey, buffer)
 	}
 
 	e.resultBufferCh = make(chan *execResult, e.concurrency)
