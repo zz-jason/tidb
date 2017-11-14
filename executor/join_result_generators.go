@@ -357,6 +357,7 @@ func (outputer *innerJoinResultGenerator) emitMatchedInners(outer Row, inners []
 		}
 		if matched {
 			resultBuffer[curLen] = joinedRow
+			curLen++
 		}
 	}
 	return resultBuffer[:curLen], curLen > originLen, nil
