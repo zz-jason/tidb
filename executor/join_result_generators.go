@@ -317,10 +317,10 @@ type innerJoinResultGenerator struct {
 	baseJoinResultGenerator
 }
 
-func makeJoinRowToBuffer(buffer []types.Datum, lhs, rhs Row) ([]types.Datum, Row) {
+func makeJoinRowToBuffer(buffer []types.Datum, lhs, rhs Row) []types.Datum {
 	buffer = append(buffer, lhs...)
 	buffer = append(buffer, rhs...)
-	return buffer[len(buffer):], buffer[:len(buffer)]
+	return buffer
 }
 
 // emitMatchedInners implements joinResultGenerator interface.
@@ -329,29 +329,26 @@ func (outputer *innerJoinResultGenerator) emitMatchedInners(outer Row, inners []
 		return resultBuffer, false, nil
 	}
 
-	buffer := make([]types.Datum, 0, (len(outer)+len(inners[0]))*len(inners))
+	sequentialDatums := make([]types.Datum, 0, (len(outer)+len(inners[0]))*len(inners))
 	if cap(resultBuffer)-len(resultBuffer) < len(inners) {
-		newBuffer := make([]Row, len(resultBuffer), len(resultBuffer)+len(inners))
-		copy(newBuffer, resultBuffer)
-		resultBuffer = newBuffer
-	}
-	originLen := len(resultBuffer)
-	if outputer.outerIsRight {
-		var joinedRow Row
-		for _, inner := range inners {
-			buffer, joinedRow = makeJoinRowToBuffer(buffer, inner, outer)
-			resultBuffer = append(resultBuffer, joinedRow)
-		}
-	} else {
-		var joinedRow Row
-		for _, inner := range inners {
-			buffer, joinedRow = makeJoinRowToBuffer(buffer, outer, inner)
-			resultBuffer = append(resultBuffer, joinedRow)
-		}
+		newResultBuffer := make([]Row, len(resultBuffer), len(resultBuffer)+len(inners))
+		copy(newResultBuffer, resultBuffer)
+		resultBuffer = newResultBuffer
 	}
 
-	if outputer.filter == nil {
-		return resultBuffer, len(resultBuffer) > originLen, nil
+	originLen := len(resultBuffer)
+	if outputer.outerIsRight {
+		for _, inner := range inners {
+			sequentialDatums = makeJoinRowToBuffer(sequentialDatums, inner, outer)
+			resultBuffer = append(resultBuffer, sequentialDatums)
+			sequentialDatums = sequentialDatums[len(sequentialDatums):]
+		}
+	} else {
+		for _, inner := range inners {
+			sequentialDatums = makeJoinRowToBuffer(sequentialDatums, outer, inner)
+			resultBuffer = append(resultBuffer, sequentialDatums)
+			sequentialDatums = sequentialDatums[len(sequentialDatums):]
+		}
 	}
 
 	curLen := originLen
