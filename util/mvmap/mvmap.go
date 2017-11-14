@@ -152,7 +152,7 @@ func (m *MVMap) Put(key, value []byte) {
 
 // Get gets the values of the key.
 func (m *MVMap) Get(key []byte) [][]byte {
-	values := make([][]byte, 0, 4)
+	var values [][]byte
 	hashKey := fnvHash64(key)
 	entryAddr := m.hashTable[hashKey]
 	for entryAddr != nullEntryAddr {
