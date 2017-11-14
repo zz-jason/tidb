@@ -330,6 +330,9 @@ func (outputer *innerJoinResultGenerator) emitMatchedInners(outer Row, inners []
 	}
 
 	buffer := make([]types.Datum, 0, (len(outer)+len(inners[0]))*len(inners))
+	if cap(resultBuffer)-len(resultBuffer) < len(inners) {
+		resultBuffer = resultBuffer[0:len(resultBuffer) : len(resultBuffer)+len(inners)]
+	}
 	originLen := len(resultBuffer)
 	if outputer.outerIsRight {
 		var joinedRow Row
