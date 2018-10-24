@@ -241,8 +241,8 @@ func (a *AggFuncDesc) GetDefaultValue() (v types.Datum) {
 	return
 }
 
-// GetAggFunc gets an evaluator according to the aggregation function signature.
-func (a *AggFuncDesc) GetAggFunc(ctx sessionctx.Context) Aggregation {
+// getAggFunc gets an evaluator according to the aggregation function signature.
+func (a *AggFuncDesc) getAggFunc(ctx sessionctx.Context) Aggregation {
 	aggFunc := aggFunction{AggFuncDesc: a}
 	switch a.Name {
 	case ast.AggFuncSum:
@@ -257,11 +257,11 @@ func (a *AggFuncDesc) GetAggFunc(ctx sessionctx.Context) Aggregation {
 		var maxLen uint64
 		s, err = variable.GetSessionSystemVar(ctx.GetSessionVars(), variable.GroupConcatMaxLen)
 		if err != nil {
-			panic(fmt.Sprintf("Error happened when GetAggFunc: no system variable named '%s'", variable.GroupConcatMaxLen))
+			panic(fmt.Sprintf("Error happened when getAggFunc: no system variable named '%s'", variable.GroupConcatMaxLen))
 		}
 		maxLen, err = strconv.ParseUint(s, 10, 64)
 		if err != nil {
-			panic(fmt.Sprintf("Error happened when GetAggFunc: illegal value for system variable named '%s'", variable.GroupConcatMaxLen))
+			panic(fmt.Sprintf("Error happened when getAggFunc: illegal value for system variable named '%s'", variable.GroupConcatMaxLen))
 		}
 		return &concatFunction{aggFunction: aggFunc, maxLen: maxLen}
 	case ast.AggFuncMax:
