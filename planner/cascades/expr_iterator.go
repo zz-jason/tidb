@@ -15,6 +15,8 @@ package cascades
 
 import (
 	"container/list"
+
+	plannercore "github.com/pingcap/tidb/planner/core"
 )
 
 // ExprIter enumerates all the equivalent expressions in the group according to
@@ -34,6 +36,10 @@ type ExprIter struct {
 
 	// children is used to iterate the child expressions.
 	children []*ExprIter
+}
+
+func (iter *ExprIter) GetLogicalPlan() plannercore.LogicalPlan {
+	return iter.element.Value.(*GroupExpr).exprNode
 }
 
 // Next returns the next group expression matches the pattern.
