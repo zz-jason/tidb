@@ -38,6 +38,10 @@ type ExprIter struct {
 	children []*ExprIter
 }
 
+func (iter *ExprIter) GetGroupExpr() *GroupExpr {
+	return iter.element.Value.(*GroupExpr)
+}
+
 func (iter *ExprIter) GetLogicalPlan() plannercore.LogicalPlan {
 	return iter.element.Value.(*GroupExpr).exprNode
 }

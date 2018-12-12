@@ -16,12 +16,17 @@ package cascades
 import (
 	"github.com/pingcap/tidb/expression"
 	plannercore "github.com/pingcap/tidb/planner/core"
-	"github.com/pingcap/tidb/sessionctx"
 )
+
+var groupExprBuilder groupExprBuilder
 
 type groupExprBuilder struct {
 }
 
-func (b *groupExprBuilder) buildSelection(pctx *plannerContext, conds []expresion.Expression) *GroupExpr {
+func (b *groupExprBuilder) buildSelection(pctx *plannerContext, conds []expression.Expression) *GroupExpr {
+	return NewGroupExpr(plannercore.LogicalProjection{}.Init(pctx.sctx))
+}
 
+func init() {
+	groupExprBuilder = groupExprBuilder{}
 }
