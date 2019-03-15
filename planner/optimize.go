@@ -17,7 +17,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/planner/cascades"
+	// "github.com/pingcap/tidb/planner/cascades"
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/privilege"
 	"github.com/pingcap/tidb/sessionctx"
@@ -62,9 +62,9 @@ func Optimize(ctx sessionctx.Context, node ast.Node, is infoschema.InfoSchema) (
 	}
 
 	// Handle the logical plan statement, use cascades planner if enabled.
-	if ctx.GetSessionVars().EnableCascadesPlanner {
-		return cascades.FindBestPlan(ctx, logic)
-	}
+	// if ctx.GetSessionVars().EnableCascadesPlanner {
+	// 	return cascades.FindBestPlan(ctx, logic)
+	// }
 	return plannercore.DoOptimize(builder.GetOptFlag(), logic)
 }
 
