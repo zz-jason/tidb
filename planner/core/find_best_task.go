@@ -111,9 +111,18 @@ func (p *baseLogicalPlan) findBestTask(prop *property.PhysicalProperty) (bestTas
 	physicalPlans := p.self.exhaustPhysicalPlans(prop)
 	prop.Cols = oldPropCols
 
+	var bestCopTask task = invalidTask
+	_, isAgg := p.self.(*LogicalAggregation)
 	for _, pp := range physicalPlans {
 		// find best child tasks firstly.
 		childTasks = childTasks[:0]
+		isCopType := false
+		if len(p.children) > 0 {
+			prop := pp.getChildReqProps(0)
+			if prop != nil {
+				isCopType = prop.TaskTp != property.RootTaskType
+			}
+		}
 		for i, child := range p.children {
 			childTask, err := child.findBestTask(pp.getChildReqProps(i))
 			if err != nil {
@@ -142,6 +151,12 @@ func (p *baseLogicalPlan) findBestTask(prop *property.PhysicalProperty) (bestTas
 		if curTask.cost() < bestTask.cost() {
 			bestTask = curTask
 		}
+		if isAgg && isCopType && curTask.cost() < bestCopTask.cost() {
+			bestCopTask = curTask
+		}
+	}
+	if isAgg && !bestCopTask.invalid() {
+		bestTask = bestCopTask
 	}
 
 	p.storeTask(prop, bestTask)
