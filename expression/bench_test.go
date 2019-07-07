@@ -189,3 +189,49 @@ func BenchmarkScalarFunctionClone(b *testing.B) {
 	}
 	b.ReportAllocs()
 }
+
+func BenchmarkScalarFuncPlus(b *testing.B) {
+	col0 := &Column{
+		RetType: &types.FieldType{Tp: mysql.TypeLonglong, Flen: mysql.MaxIntWidth},
+		Index:   0,
+	}
+	col1 := &Column{
+		RetType: &types.FieldType{Tp: mysql.TypeLonglong, Flen: mysql.MaxIntWidth},
+		Index:   1,
+	}
+
+	ctx := mock.NewContext()
+	ctx.GetSessionVars().StmtCtx.TimeZone = time.Local
+	ctx.GetSessionVars().InitChunkSize = 32
+	ctx.GetSessionVars().MaxChunkSize = 1024
+
+	funcPlus, err := NewFunction(
+		ctx,
+		ast.Plus,
+		&types.FieldType{Tp: mysql.TypeLonglong, Flen: mysql.MaxIntWidth},
+		[]Expression{col0, col1}...,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Construct input and output Chunks.
+	inputChunk := chunk.NewChunkWithCapacity([]*types.FieldType{col0.RetType, col1.RetType}, 1024)
+	for i := 0; i < 1024; i++ {
+		inputChunk.AppendInt64(0, int64(i))
+		inputChunk.AppendInt64(1, int64(i))
+	}
+
+	outputChunk := chunk.NewChunkWithCapacity([]*types.FieldType{col0.RetType}, 1024)
+	inputIter := chunk.NewIterator4Chunk(inputChunk)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		outputChunk.Reset()
+
+		err := VectorizedExecute(ctx, []Expression{funcPlus}, inputIter, outputChunk)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
