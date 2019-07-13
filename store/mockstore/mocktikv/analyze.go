@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tipb/go-tipb"
@@ -190,6 +191,10 @@ func (h *rpcHandler) handleAnalyzeColumnsReq(req *coprocessor.Request, analyzeRe
 // Fields implements the sqlexec.RecordSet Fields interface.
 func (e *analyzeColumnsExec) Fields() []*ast.ResultField {
 	return e.fields
+}
+
+func (e *analyzeColumnsExec) ColumnInfos() []*util.ColumnInfo {
+	return nil
 }
 
 func (e *analyzeColumnsExec) getNext(ctx context.Context) ([]types.Datum, error) {

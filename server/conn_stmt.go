@@ -43,6 +43,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/hack"
 	"golang.org/x/net/context"
 )
@@ -57,11 +58,11 @@ func (cc *clientConn) handleStmtPrepare(sql string) error {
 	//status ok
 	data = append(data, 0)
 	//stmt id
-	data = dumpUint32(data, uint32(stmt.ID()))
+	data = util.DumpUint32(data, uint32(stmt.ID()))
 	//number columns
-	data = dumpUint16(data, uint16(len(columns)))
+	data = util.DumpUint16(data, uint16(len(columns)))
 	//number params
-	data = dumpUint16(data, uint16(len(params)))
+	data = util.DumpUint16(data, uint16(len(params)))
 	//filter [00]
 	data = append(data, 0)
 	//warning count

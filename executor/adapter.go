@@ -36,6 +36,9 @@ import (
 	"github.com/pingcap/tidb/plugin"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util"
+	"github.com/pingcap/tidb/util/charset"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/sqlexec"
@@ -64,6 +67,75 @@ func (a *recordSet) Fields() []*ast.ResultField {
 		a.fields = schema2ResultFields(a.executor.Schema(), a.stmt.Ctx.GetSessionVars().CurrentDB)
 	}
 	return a.fields
+}
+
+func (a *recordSet) ColumnInfos() []*util.ColumnInfo {
+	defaultDB := a.stmt.Ctx.GetSessionVars().CurrentDB
+	schema := a.executor.Schema()
+	colInfos := make([]*util.ColumnInfo, 0, schema.Len())
+	for i, col := range schema.Columns {
+		colInfos = append(colInfos, &util.ColumnInfo{})
+		// fill Schema.
+		dbName := col.DBName.O
+		if dbName == "" && col.TblName.L != "" {
+			dbName = defaultDB
+		}
+		colInfos[i].Schema = dbName
+
+		// fill Table and OrgTable
+		colInfos[i].Table = col.TblName.O
+		colInfos[i].OrgTable = col.OrigTblName.O
+		colInfos[i].Name = col.ColName.O
+
+		// fill OrgName
+		colInfos[i].OrgName = col.OrigColName.O
+		if colInfos[i].OrgName == "" {
+			colInfos[i].OrgName = col.ColName.O
+		}
+
+		// fill ColumnLength
+		if col.RetType.Flen == types.UnspecifiedLength {
+			colInfos[i].ColumnLength = 0
+		} else {
+			colInfos[i].ColumnLength = uint32(col.RetType.Flen)
+		}
+		if col.RetType.Tp == mysql.TypeNewDecimal {
+			colInfos[i].ColumnLength++
+			if col.RetType.Decimal > types.DefaultFsp {
+				colInfos[i].ColumnLength++
+			}
+		} else if types.IsString(col.RetType.Tp) {
+			charsetDesc, err := charset.GetCharsetDesc(col.RetType.Charset)
+			if err != nil {
+				colInfos[i].ColumnLength = colInfos[i].ColumnLength * 4
+			} else {
+				colInfos[i].ColumnLength = colInfos[i].ColumnLength * uint32(charsetDesc.Maxlen)
+			}
+		}
+
+		// fill Charset
+		colInfos[i].Charset = uint16(mysql.CharsetIDs[col.RetType.Charset])
+		colInfos[i].Flag = uint16(col.RetType.Flag)
+
+		// fill Decimal
+		if col.RetType.Decimal == types.UnspecifiedLength {
+			if col.RetType.Tp == mysql.TypeDuration {
+				colInfos[i].Decimal = types.DefaultFsp
+			} else {
+				colInfos[i].Decimal = mysql.NotFixedDec
+			}
+		} else {
+			colInfos[i].Decimal = uint8(col.RetType.Decimal)
+		}
+
+		// fill Type
+		if col.RetType.Tp == mysql.TypeVarchar {
+			colInfos[i].Type = mysql.TypeVarString
+		} else {
+			colInfos[i].Type = col.RetType.Tp
+		}
+	}
+	return colInfos
 }
 
 func schema2ResultFields(schema *expression.Schema, defaultDB string) (rfs []*ast.ResultField) {

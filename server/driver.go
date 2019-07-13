@@ -66,13 +66,13 @@ type QueryCtx interface {
 	SetClientCapability(uint32)
 
 	// Prepare prepares a statement.
-	Prepare(sql string) (statement PreparedStatement, columns, params []*ColumnInfo, err error)
+	Prepare(sql string) (statement PreparedStatement, columns, params []*util.ColumnInfo, err error)
 
 	// GetStatement gets PreparedStatement by statement ID.
 	GetStatement(stmtID int) PreparedStatement
 
 	// FieldList returns columns of a table.
-	FieldList(tableName string) (columns []*ColumnInfo, err error)
+	FieldList(tableName string) (columns []*util.ColumnInfo, err error)
 
 	// Close closes the QueryCtx.
 	Close() error
@@ -129,7 +129,7 @@ type PreparedStatement interface {
 
 // ResultSet is the result set of an query.
 type ResultSet interface {
-	Columns() []*ColumnInfo
+	Columns() []*util.ColumnInfo
 	NewChunk() *chunk.Chunk
 	Next(context.Context, *chunk.Chunk) error
 	StoreFetchedRows(rows []chunk.Row)

@@ -45,6 +45,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/hack"
 )
@@ -92,25 +93,6 @@ func parseLengthEncodedInt(b []byte) (num uint64, isNull bool, n int) {
 	return
 }
 
-func dumpLengthEncodedInt(buffer []byte, n uint64) []byte {
-	switch {
-	case n <= 250:
-		return append(buffer, tinyIntCache[n]...)
-
-	case n <= 0xffff:
-		return append(buffer, 0xfc, byte(n), byte(n>>8))
-
-	case n <= 0xffffff:
-		return append(buffer, 0xfd, byte(n), byte(n>>8), byte(n>>16))
-
-	case n <= 0xffffffffffffffff:
-		return append(buffer, 0xfe, byte(n), byte(n>>8), byte(n>>16), byte(n>>24),
-			byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
-	}
-
-	return buffer
-}
-
 func parseLengthEncodedBytes(b []byte) ([]byte, bool, int, error) {
 	// Get length
 	num, isNull, n := parseLengthEncodedInt(b)
@@ -128,49 +110,9 @@ func parseLengthEncodedBytes(b []byte) ([]byte, bool, int, error) {
 	return nil, false, n, io.EOF
 }
 
-func dumpLengthEncodedString(buffer []byte, bytes []byte) []byte {
-	buffer = dumpLengthEncodedInt(buffer, uint64(len(bytes)))
-	buffer = append(buffer, bytes...)
-	return buffer
-}
-
-func dumpUint16(buffer []byte, n uint16) []byte {
-	buffer = append(buffer, byte(n))
-	buffer = append(buffer, byte(n>>8))
-	return buffer
-}
-
-func dumpUint32(buffer []byte, n uint32) []byte {
-	buffer = append(buffer, byte(n))
-	buffer = append(buffer, byte(n>>8))
-	buffer = append(buffer, byte(n>>16))
-	buffer = append(buffer, byte(n>>24))
-	return buffer
-}
-
-func dumpUint64(buffer []byte, n uint64) []byte {
-	buffer = append(buffer, byte(n))
-	buffer = append(buffer, byte(n>>8))
-	buffer = append(buffer, byte(n>>16))
-	buffer = append(buffer, byte(n>>24))
-	buffer = append(buffer, byte(n>>32))
-	buffer = append(buffer, byte(n>>40))
-	buffer = append(buffer, byte(n>>48))
-	buffer = append(buffer, byte(n>>56))
-	return buffer
-}
-
-var tinyIntCache [251][]byte
-
-func init() {
-	for i := 0; i < len(tinyIntCache); i++ {
-		tinyIntCache[i] = []byte{byte(i)}
-	}
-}
-
 func dumpBinaryTime(dur time.Duration) (data []byte) {
 	if dur == 0 {
-		data = tinyIntCache[0]
+		data = util.TinyIntCache[0]
 		return
 	}
 	data = make([]byte, 13)
@@ -213,18 +155,18 @@ func dumpBinaryDateTime(data []byte, t types.Time, loc *time.Location) ([]byte, 
 	switch t.Type {
 	case mysql.TypeTimestamp, mysql.TypeDatetime:
 		data = append(data, 11)
-		data = dumpUint16(data, uint16(year))
+		data = util.DumpUint16(data, uint16(year))
 		data = append(data, byte(mon), byte(day), byte(t.Time.Hour()), byte(t.Time.Minute()), byte(t.Time.Second()))
-		data = dumpUint32(data, uint32(t.Time.Microsecond()))
+		data = util.DumpUint32(data, uint32(t.Time.Microsecond()))
 	case mysql.TypeDate:
 		data = append(data, 4)
-		data = dumpUint16(data, uint16(year)) //year
+		data = util.DumpUint16(data, uint16(year)) //year
 		data = append(data, byte(mon), byte(day))
 	}
 	return data, nil
 }
 
-func dumpBinaryRow(buffer []byte, columns []*ColumnInfo, row chunk.Row) ([]byte, error) {
+func dumpBinaryRow(buffer []byte, columns []*util.ColumnInfo, row chunk.Row) ([]byte, error) {
 	buffer = append(buffer, mysql.OKHeader)
 	nullBitmapOff := len(buffer)
 	numBytes4Null := (len(columns) + 7 + 2) / 8
@@ -242,20 +184,20 @@ func dumpBinaryRow(buffer []byte, columns []*ColumnInfo, row chunk.Row) ([]byte,
 		case mysql.TypeTiny:
 			buffer = append(buffer, byte(row.GetInt64(i)))
 		case mysql.TypeShort, mysql.TypeYear:
-			buffer = dumpUint16(buffer, uint16(row.GetInt64(i)))
+			buffer = util.DumpUint16(buffer, uint16(row.GetInt64(i)))
 		case mysql.TypeInt24, mysql.TypeLong:
-			buffer = dumpUint32(buffer, uint32(row.GetInt64(i)))
+			buffer = util.DumpUint32(buffer, uint32(row.GetInt64(i)))
 		case mysql.TypeLonglong:
-			buffer = dumpUint64(buffer, row.GetUint64(i))
+			buffer = util.DumpUint64(buffer, row.GetUint64(i))
 		case mysql.TypeFloat:
-			buffer = dumpUint32(buffer, math.Float32bits(row.GetFloat32(i)))
+			buffer = util.DumpUint32(buffer, math.Float32bits(row.GetFloat32(i)))
 		case mysql.TypeDouble:
-			buffer = dumpUint64(buffer, math.Float64bits(row.GetFloat64(i)))
+			buffer = util.DumpUint64(buffer, math.Float64bits(row.GetFloat64(i)))
 		case mysql.TypeNewDecimal:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetMyDecimal(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetMyDecimal(i).String()))
 		case mysql.TypeString, mysql.TypeVarString, mysql.TypeVarchar, mysql.TypeBit,
 			mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob, mysql.TypeBlob:
-			buffer = dumpLengthEncodedString(buffer, row.GetBytes(i))
+			buffer = util.DumpLengthEncodedString(buffer, row.GetBytes(i))
 		case mysql.TypeDate, mysql.TypeDatetime, mysql.TypeTimestamp:
 			var err error
 			buffer, err = dumpBinaryDateTime(buffer, row.GetTime(i), nil)
@@ -265,11 +207,11 @@ func dumpBinaryRow(buffer []byte, columns []*ColumnInfo, row chunk.Row) ([]byte,
 		case mysql.TypeDuration:
 			buffer = append(buffer, dumpBinaryTime(row.GetDuration(i, 0).Duration)...)
 		case mysql.TypeEnum:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetEnum(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetEnum(i).String()))
 		case mysql.TypeSet:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetSet(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetSet(i).String()))
 		case mysql.TypeJSON:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetJSON(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetJSON(i).String()))
 		default:
 			return nil, errInvalidType.GenWithStack("invalid type %v", columns[i].Type)
 		}
@@ -277,7 +219,7 @@ func dumpBinaryRow(buffer []byte, columns []*ColumnInfo, row chunk.Row) ([]byte,
 	return buffer, nil
 }
 
-func dumpTextRow(buffer []byte, columns []*ColumnInfo, row chunk.Row) ([]byte, error) {
+func dumpTextRow(buffer []byte, columns []*util.ColumnInfo, row chunk.Row) ([]byte, error) {
 	tmp := make([]byte, 0, 20)
 	for i, col := range columns {
 		if row.IsNull(i) {
@@ -287,7 +229,7 @@ func dumpTextRow(buffer []byte, columns []*ColumnInfo, row chunk.Row) ([]byte, e
 		switch col.Type {
 		case mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24, mysql.TypeLong:
 			tmp = strconv.AppendInt(tmp[:0], row.GetInt64(i), 10)
-			buffer = dumpLengthEncodedString(buffer, tmp)
+			buffer = util.DumpLengthEncodedString(buffer, tmp)
 		case mysql.TypeYear:
 			year := row.GetInt64(i)
 			tmp = tmp[:0]
@@ -296,44 +238,44 @@ func dumpTextRow(buffer []byte, columns []*ColumnInfo, row chunk.Row) ([]byte, e
 			} else {
 				tmp = strconv.AppendInt(tmp, year, 10)
 			}
-			buffer = dumpLengthEncodedString(buffer, tmp)
+			buffer = util.DumpLengthEncodedString(buffer, tmp)
 		case mysql.TypeLonglong:
 			if mysql.HasUnsignedFlag(uint(columns[i].Flag)) {
 				tmp = strconv.AppendUint(tmp[:0], row.GetUint64(i), 10)
 			} else {
 				tmp = strconv.AppendInt(tmp[:0], row.GetInt64(i), 10)
 			}
-			buffer = dumpLengthEncodedString(buffer, tmp)
+			buffer = util.DumpLengthEncodedString(buffer, tmp)
 		case mysql.TypeFloat:
 			prec := -1
 			if columns[i].Decimal > 0 && int(col.Decimal) != mysql.NotFixedDec {
 				prec = int(col.Decimal)
 			}
 			tmp = appendFormatFloat(tmp[:0], float64(row.GetFloat32(i)), prec, 32)
-			buffer = dumpLengthEncodedString(buffer, tmp)
+			buffer = util.DumpLengthEncodedString(buffer, tmp)
 		case mysql.TypeDouble:
 			prec := types.UnspecifiedLength
 			if col.Decimal > 0 && int(col.Decimal) != mysql.NotFixedDec {
 				prec = int(col.Decimal)
 			}
 			tmp = appendFormatFloat(tmp[:0], row.GetFloat64(i), prec, 64)
-			buffer = dumpLengthEncodedString(buffer, tmp)
+			buffer = util.DumpLengthEncodedString(buffer, tmp)
 		case mysql.TypeNewDecimal:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetMyDecimal(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetMyDecimal(i).String()))
 		case mysql.TypeString, mysql.TypeVarString, mysql.TypeVarchar, mysql.TypeBit,
 			mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob, mysql.TypeBlob:
-			buffer = dumpLengthEncodedString(buffer, row.GetBytes(i))
+			buffer = util.DumpLengthEncodedString(buffer, row.GetBytes(i))
 		case mysql.TypeDate, mysql.TypeDatetime, mysql.TypeTimestamp:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetTime(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetTime(i).String()))
 		case mysql.TypeDuration:
 			dur := row.GetDuration(i, int(col.Decimal))
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(dur.String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(dur.String()))
 		case mysql.TypeEnum:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetEnum(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetEnum(i).String()))
 		case mysql.TypeSet:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetSet(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetSet(i).String()))
 		case mysql.TypeJSON:
-			buffer = dumpLengthEncodedString(buffer, hack.Slice(row.GetJSON(i).String()))
+			buffer = util.DumpLengthEncodedString(buffer, hack.Slice(row.GetJSON(i).String()))
 		default:
 			return nil, errInvalidType.GenWithStack("invalid type %v", columns[i].Type)
 		}

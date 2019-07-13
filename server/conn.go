@@ -39,7 +39,6 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
-	"github.com/pingcap/tidb/plugin"
 	"io"
 	"net"
 	"runtime"
@@ -48,6 +47,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/pingcap/tidb/plugin"
+	"github.com/pingcap/tidb/util"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
@@ -141,7 +143,7 @@ func (cc *clientConn) handshake(ctx context.Context) error {
 	data = append(data, mysql.OKHeader)
 	data = append(data, 0, 0)
 	if cc.capability&mysql.ClientProtocol41 > 0 {
-		data = dumpUint16(data, mysql.ServerStatusAutocommit)
+		data = util.DumpUint16(data, mysql.ServerStatusAutocommit)
 		data = append(data, 0, 0)
 	}
 
@@ -201,7 +203,7 @@ func (cc *clientConn) writeInitialHandshake() error {
 	}
 	data = append(data, cc.collation)
 	// status
-	data = dumpUint16(data, mysql.ServerStatusAutocommit)
+	data = util.DumpUint16(data, mysql.ServerStatusAutocommit)
 	// below 13 byte may not be used
 	// capability flag upper 2 bytes, using default capability here
 	data = append(data, byte(cc.server.capability>>16), byte(cc.server.capability>>24))
@@ -704,11 +706,11 @@ func (cc *clientConn) flush() error {
 func (cc *clientConn) writeOK() error {
 	data := cc.alloc.AllocWithLen(4, 32)
 	data = append(data, mysql.OKHeader)
-	data = dumpLengthEncodedInt(data, cc.ctx.AffectedRows())
-	data = dumpLengthEncodedInt(data, cc.ctx.LastInsertID())
+	data = util.DumpLengthEncodedInt(data, cc.ctx.AffectedRows())
+	data = util.DumpLengthEncodedInt(data, cc.ctx.LastInsertID())
 	if cc.capability&mysql.ClientProtocol41 > 0 {
-		data = dumpUint16(data, cc.ctx.Status())
-		data = dumpUint16(data, cc.ctx.WarningCount())
+		data = util.DumpUint16(data, cc.ctx.Status())
+		data = util.DumpUint16(data, cc.ctx.WarningCount())
 	}
 
 	err := cc.writePacket(data)
@@ -760,10 +762,10 @@ func (cc *clientConn) writeEOF(serverStatus uint16) error {
 
 	data = append(data, mysql.EOFHeader)
 	if cc.capability&mysql.ClientProtocol41 > 0 {
-		data = dumpUint16(data, cc.ctx.WarningCount())
+		data = util.DumpUint16(data, cc.ctx.WarningCount())
 		status := cc.ctx.Status()
 		status |= serverStatus
-		data = dumpUint16(data, status)
+		data = util.DumpUint16(data, status)
 	}
 
 	err := cc.writePacket(data)
@@ -1016,9 +1018,9 @@ func (cc *clientConn) writeResultset(ctx context.Context, rs ResultSet, binary b
 	return errors.Trace(cc.flush())
 }
 
-func (cc *clientConn) writeColumnInfo(columns []*ColumnInfo, serverStatus uint16) error {
+func (cc *clientConn) writeColumnInfo(columns []*util.ColumnInfo, serverStatus uint16) error {
 	data := make([]byte, 4, 1024)
-	data = dumpLengthEncodedInt(data, uint64(len(columns)))
+	data = util.DumpLengthEncodedInt(data, uint64(len(columns)))
 	if err := cc.writePacket(data); err != nil {
 		return errors.Trace(err)
 	}

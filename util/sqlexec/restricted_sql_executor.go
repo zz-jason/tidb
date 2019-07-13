@@ -17,6 +17,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/chunk"
 	"golang.org/x/net/context"
 )
@@ -80,6 +81,8 @@ type Statement interface {
 type RecordSet interface {
 	// Fields gets result fields.
 	Fields() []*ast.ResultField
+
+	ColumnInfos() []*util.ColumnInfo
 
 	// Next reads records into chunk.
 	Next(ctx context.Context, chk *chunk.Chunk) error

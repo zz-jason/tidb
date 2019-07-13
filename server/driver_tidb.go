@@ -275,12 +275,12 @@ func (tc *TiDBContext) Auth(user *auth.UserIdentity, auth []byte, salt []byte) b
 }
 
 // FieldList implements QueryCtx FieldList method.
-func (tc *TiDBContext) FieldList(table string) (columns []*ColumnInfo, err error) {
+func (tc *TiDBContext) FieldList(table string) (columns []*util.ColumnInfo, err error) {
 	fields, err := tc.session.FieldList(table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	columns = make([]*ColumnInfo, 0, len(fields))
+	columns = make([]*util.ColumnInfo, 0, len(fields))
 	for _, f := range fields {
 		columns = append(columns, convertColumnInfo(f))
 	}
@@ -297,7 +297,7 @@ func (tc *TiDBContext) GetStatement(stmtID int) PreparedStatement {
 }
 
 // Prepare implements QueryCtx Prepare method.
-func (tc *TiDBContext) Prepare(sql string) (statement PreparedStatement, columns, params []*ColumnInfo, err error) {
+func (tc *TiDBContext) Prepare(sql string) (statement PreparedStatement, columns, params []*util.ColumnInfo, err error) {
 	stmtID, paramCount, fields, err := tc.session.PrepareStmt(sql)
 	if err != nil {
 		return
@@ -309,13 +309,13 @@ func (tc *TiDBContext) Prepare(sql string) (statement PreparedStatement, columns
 		ctx:         tc,
 	}
 	statement = stmt
-	columns = make([]*ColumnInfo, len(fields))
+	columns = make([]*util.ColumnInfo, len(fields))
 	for i := range fields {
 		columns[i] = convertColumnInfo(fields[i])
 	}
-	params = make([]*ColumnInfo, paramCount)
+	params = make([]*util.ColumnInfo, paramCount)
 	for i := range params {
-		params[i] = &ColumnInfo{
+		params[i] = &util.ColumnInfo{
 			Type: mysql.TypeBlob,
 		}
 	}
@@ -340,7 +340,7 @@ func (tc *TiDBContext) SetCommandValue(command byte) {
 
 type tidbResultSet struct {
 	recordSet sqlexec.RecordSet
-	columns   []*ColumnInfo
+	columns   []*util.ColumnInfo
 	rows      []chunk.Row
 	closed    int32
 }
@@ -371,18 +371,15 @@ func (trs *tidbResultSet) Close() error {
 	return trs.recordSet.Close()
 }
 
-func (trs *tidbResultSet) Columns() []*ColumnInfo {
+func (trs *tidbResultSet) Columns() []*util.ColumnInfo {
 	if trs.columns == nil {
-		fields := trs.recordSet.Fields()
-		for _, v := range fields {
-			trs.columns = append(trs.columns, convertColumnInfo(v))
-		}
+		trs.columns = trs.recordSet.ColumnInfos()
 	}
 	return trs.columns
 }
 
-func convertColumnInfo(fld *ast.ResultField) (ci *ColumnInfo) {
-	ci = new(ColumnInfo)
+func convertColumnInfo(fld *ast.ResultField) (ci *util.ColumnInfo) {
+	ci = new(util.ColumnInfo)
 	ci.Name = fld.ColumnAsName.O
 	ci.OrgName = fld.Column.Name.O
 	ci.Table = fld.TableAsName.O
