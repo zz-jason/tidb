@@ -463,7 +463,7 @@ func (e *IndexLookUpExecutor) startIndexWorker(ctx context.Context, kvRanges []k
 		if err != nil {
 			e.feedback.Invalidate()
 		}
-		e.ctx.StoreQueryFeedback(e.feedback)
+		// e.ctx.StoreQueryFeedback(e.feedback)
 		cancel()
 		if err := result.Close(); err != nil {
 			logutil.Logger(ctx).Error("close Select result failed", zap.Error(err))
