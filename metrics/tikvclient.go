@@ -76,6 +76,14 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 20),
 		}, []string{LblType})
 
+	TiKVSendCopReqSizeHistogram = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "tidb",
+			Subsystem: "tikvclient",
+			Name:      "send_coptask_size_bytes",
+			Help:      "Size of coptask to call a RPC.",
+			Buckets:   prometheus.ExponentialBuckets(1, 2, 21),
+		})
 	TiKVSendReqHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "tidb",

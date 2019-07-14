@@ -243,6 +243,9 @@ func (c *rpcClient) SendRequest(ctx context.Context, addr string, req *tikvrpc.R
 	start := time.Now()
 	reqType := req.Type.String()
 	storeID := strconv.FormatUint(req.Context.GetPeer().GetStoreId(), 10)
+	if req.Type == tikvrpc.CmdCop {
+		metrics.TiKVSendCopReqSizeHistogram.Observe(float64(req.Cop.Size()))
+	}
 	defer func() {
 		metrics.TiKVSendReqHistogram.WithLabelValues(reqType, storeID).Observe(time.Since(start).Seconds())
 	}()
