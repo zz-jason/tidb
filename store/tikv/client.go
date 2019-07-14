@@ -110,6 +110,7 @@ func (a *connArray) Init(addr string, security config.Security) error {
 		opt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 	}
 
+	grpc_prometheus.EnableClientHandlingTimeHistogram()
 	unaryInterceptor := grpc_prometheus.UnaryClientInterceptor
 	streamInterceptor := grpc_prometheus.StreamClientInterceptor
 	cfg := config.GetGlobalConfig()

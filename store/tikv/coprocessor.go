@@ -446,7 +446,7 @@ func (rs *copResponse) MemSize() int64 {
 	return rs.respSize
 }
 
-const minLogCopTaskTime = 300 * time.Millisecond
+const minLogCopTaskTime = 300000 * time.Millisecond
 
 // run is a worker function that get a copTask from channel, handle it and
 // send the result back.
