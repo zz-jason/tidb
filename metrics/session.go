@@ -23,7 +23,7 @@ var (
 			Subsystem: "session",
 			Name:      "parse_duration_seconds",
 			Help:      "Bucketed histogram of processing time (s) in parse SQL.",
-			Buckets:   prometheus.ExponentialBuckets(0.00004, 1.6, 13), // 40us ~ 18ms
+			Buckets:   prometheus.ExponentialBuckets(0.00004, 2, 13), // 40us ~ 327ms
 		}, []string{LblSQLType})
 	SessionExecuteCompileDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
