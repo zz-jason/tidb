@@ -15,8 +15,10 @@
 package linux
 
 import (
-	"golang.org/x/sys/unix"
 	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 // OSVersion returns version info of operation system.
@@ -38,7 +40,7 @@ func OSVersion() (osVersion string, err error) {
 		}
 		return string(s[0:lens])
 	}
-	osVersion = charsToString(un.Sysname[:]) + " " + charsToString(un.Release[:]) + "." + charsToString(un.Machine[:])
+	osVersion = "Linux " + *(*string)(unsafe.Pointer(&un.Release[:])) + "." + *(*string)(unsafe.Pointer(&un.Machine[:]))
 	return
 }
 
