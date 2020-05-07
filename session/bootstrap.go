@@ -284,6 +284,13 @@ const (
 	CreateOptRuleBlacklist = `CREATE TABLE IF NOT EXISTS mysql.opt_rule_blacklist (
 		name char(100) NOT NULL
 	);`
+
+	CreateLoginBlackList = `CREATE TABLE IF NOT EXISTS mysql.login_blacklist (
+		HOST char(60) COLLATE utf8_bin NOT NULL DEFAULT '',
+		USER char(32) COLLATE utf8_bin NOT NULL DEFAULT '',
+		lock_time timestamp default null,
+		primary key(USER, HOST)
+	)`
 )
 
 // bootstrap initiates system DB for a store.
@@ -1108,6 +1115,7 @@ func doDDLWorks(s Session) {
 	mustExecute(s, CreateExprPushdownBlacklist)
 	// Create opt_rule_blacklist table.
 	mustExecute(s, CreateOptRuleBlacklist)
+	mustExecute(s, CreateLoginBlackList)
 }
 
 // doDMLWorks executes DML statements in bootstrap stage.
