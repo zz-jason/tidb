@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/admin"
 	"github.com/pingcap/tidb/util/mock"
@@ -452,6 +453,9 @@ func buildCancelJobTests(firstID int64) []testCancelJob {
 		{act: model.ActionDropPrimaryKey, jobIDs: []int64{firstID + 37}, cancelRetErrs: []error{admin.ErrCannotCancelDDLJob.GenWithStackByArgs(firstID + 37)}, cancelState: model.StateDeleteOnly},
 
 		{act: model.ActionRenameDatabase, jobIDs: []int64{firstID + 38}, cancelRetErrs: noErrs, cancelState: model.StateNone},
+
+		{act: model.ActionAlterIndexVisibility, jobIDs: []int64{firstID + 40}, cancelRetErrs: noErrs, cancelState: model.StateNone},
+		{act: model.ActionAlterIndexVisibility, jobIDs: []int64{firstID + 41}, cancelRetErrs: []error{admin.ErrCancelFinishedDDLJob.GenWithStackByArgs(firstID + 47)}, cancelState: model.StatePublic},
 	}
 
 	return tests
@@ -501,7 +505,16 @@ func (s *testDDLSuite) checkCancelDropColumn(c *C, d *ddl, schemaID int64, table
 	c.Assert(notFound, Equals, success)
 }
 
-func (s *testDDLSuite) TestCancelJob(c *C) {
+func checkIdxVisibility(changedTable table.Table, idxName string, expected bool) bool {
+	for _, idxInfo := range changedTable.Meta().Indices {
+		if idxInfo.Name.O == idxName && idxInfo.Invisible == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *testDDLSuite) TestCancelJob1(c *C) {
 	store := testCreateStore(c, "test_cancel_job")
 	defer store.Close()
 	d := newDDL(
@@ -855,10 +868,34 @@ func (s *testDDLSuite) TestCancelJob(c *C) {
 	s.checkDropIdx(c, d, dbInfo.ID, tblInfo.ID, idxOrigName, true)
 
 	// for rename database
-	updateTest(&tests[33])
+	updateTest(&tests[34])
 	doDDLJobErrWithSchemaState(ctx, d, c, dbInfo1.ID, 0, model.ActionRenameDatabase, []interface{}{"newDB"}, &cancelState)
 	c.Check(checkErr, IsNil)
 	testCheckSchemaState(c, d, dbInfo, model.StatePublic)
+
+	// test alter index visibility failed caused by canceled.
+	indexName := "idx_c3"
+	testCreateIndex(c, ctx, d, dbInfo, tblInfo, false, indexName, "c3")
+	c.Check(errors.ErrorStack(checkErr), Equals, "")
+	txn, err = ctx.Txn(true)
+	c.Assert(err, IsNil)
+	c.Assert(txn.Commit(context.Background()), IsNil)
+	s.checkAddIdx(c, d, dbInfo.ID, tblInfo.ID, indexName, true)
+
+	updateTest(&tests[35])
+	alterIndexVisibility := []interface{}{model.NewCIStr(indexName), true}
+	doDDLJobErrWithSchemaState(ctx, d, c, dbInfo.ID, tblInfo.ID, test.act, alterIndexVisibility, &test.cancelState)
+	c.Check(checkErr, IsNil)
+	changedTable = testGetTable(c, d, dbInfo.ID, tblInfo.ID)
+	c.Assert(checkIdxVisibility(changedTable, indexName, false), IsTrue)
+
+	// cancel alter index visibility successfully
+	updateTest(&tests[36])
+	alterIndexVisibility = []interface{}{model.NewCIStr(indexName), true}
+	doDDLJobSuccess(ctx, d, c, dbInfo.ID, tblInfo.ID, test.act, alterIndexVisibility)
+	c.Check(checkErr, IsNil)
+	changedTable = testGetTable(c, d, dbInfo.ID, tblInfo.ID)
+	c.Assert(checkIdxVisibility(changedTable, indexName, true), IsTrue)
 }
 
 func (s *testDDLSuite) TestIgnorableSpec(c *C) {
