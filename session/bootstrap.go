@@ -391,6 +391,8 @@ const (
 	version44 = 44
 	// version45 introduces CONFIG_PRIV for SET CONFIG statements.
 	version45 = 45
+	// version46 introduces mysql.login_blacklist to detect login fail.
+	version46 = 46
 )
 
 var (
@@ -439,6 +441,7 @@ var (
 		upgradeToVer43,
 		upgradeToVer44,
 		upgradeToVer45,
+		upgradeToVer46,
 	}
 )
 
@@ -1050,6 +1053,19 @@ func upgradeToVer45(s Session, ver int64) {
 	}
 	doReentrantDDL(s, "ALTER TABLE mysql.user ADD COLUMN `Config_priv` ENUM('N','Y') DEFAULT 'N'", infoschema.ErrColumnExists)
 	mustExecute(s, "UPDATE HIGH_PRIORITY mysql.user SET Config_priv='Y' where Super_priv='Y'")
+}
+
+func upgradeToVer46(s Session, ver int64) {
+	if ver >= version46 {
+		return
+	}
+	mustExecute(s, CreateLoginBlackList)
+	sql := fmt.Sprintf("INSERT IGNORE INTO  %s.%s (`VARIABLE_NAME`, `VARIABLE_VALUE`) VALUES ('%s', '%d')",
+		mysql.SystemDB, mysql.GlobalVariablesTable, variable.MaxLoginAttempts, 10)
+	mustExecute(s, sql)
+	sql = fmt.Sprintf("INSERT IGNORE INTO  %s.%s (`VARIABLE_NAME`, `VARIABLE_VALUE`) VALUES ('%s', '%d')",
+		mysql.SystemDB, mysql.GlobalVariablesTable, variable.LoginBlockInterval, 3600)
+	mustExecute(s, sql)
 }
 
 // updateBootstrapVer updates bootstrap version variable in mysql.TiDB table.
