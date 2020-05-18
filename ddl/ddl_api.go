@@ -1132,7 +1132,13 @@ func checkConstraintNames(constraints []*ast.Constraint) error {
 }
 
 // checkInvisibleIndexOnPK check if primary key is invisible index.
+// Note: PKIsHandle == true means the table already has a visible primary key,
+// we do not need do a check for this case and return directly,
+// because whether primary key is invisible has been check when creating table.
 func checkInvisibleIndexOnPK(tblInfo *model.TableInfo) error {
+	if tblInfo.PKIsHandle {
+		return nil
+	}
 	pk := getPrimaryKey(tblInfo)
 	if pk != nil && pk.Invisible {
 		return ErrPKIndexCantBeInvisible
@@ -1154,15 +1160,31 @@ func getPrimaryKey(tblInfo *model.TableInfo) *model.IndexInfo {
 			// table has explicit primary key
 			return key
 		}
+		// The case index without any columns should never happen, but still do a check here
+		if len(key.Columns) == 0 {
+			continue
+		}
 		// find the first unique key with NOT NULL columns
 		if implicitPK == nil && key.Unique {
 			// ensure all columns in unique key have NOT NULL flag
 			allColNotNull := true
+			skip := false
 			for _, idxCol := range key.Columns {
 				col := model.FindColumnInfo(tblInfo.Cols(), idxCol.Name.L)
+				// This index has a column in DeleteOnly state,
+				// or it is expression index (it defined on a hidden column),
+				// it can not be implicit PK, go to next index iterator
+				if col == nil || col.Hidden {
+					skip = true
+					break
+				}
 				if !mysql.HasNotNullFlag(col.Flag) {
 					allColNotNull = false
+					break
 				}
+			}
+			if skip {
+				continue
 			}
 			if allColNotNull {
 				implicitPK = key
@@ -1270,6 +1292,11 @@ func buildTableInfo(
 				switch lastCol.Tp {
 				case mysql.TypeLong, mysql.TypeLonglong,
 					mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24:
+					// Primary key cannot be invisible.
+					if constr.Option != nil && constr.Option.Visibility == ast.IndexVisibilityInvisible {
+						return nil, ErrPKIndexCantBeInvisible
+					}
+
 					tbInfo.PKIsHandle = true
 					// Avoid creating index for PK handle column.
 					continue
@@ -1495,10 +1522,6 @@ func buildTableInfoWithStmt(ctx sessionctx.Context, s *ast.CreateTableStmt, dbCh
 	}
 
 	if err = handleTableOptions(s.Options, tbInfo); err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if err = checkInvisibleIndexOnPK(tbInfo); err != nil {
 		return nil, errors.Trace(err)
 	}
 
