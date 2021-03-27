@@ -9,3 +9,4 @@ enabled = true
     "github.com/pingcap/tidb",
     "github.com/pingcap/tidb/tests/globalkilltest"
   ]
+  import_root = [ "github.com/pingcap/tidb" ]
