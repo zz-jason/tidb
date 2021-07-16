@@ -304,10 +304,10 @@ func (s *testRangerSuite) TestTableRange(c *C) {
 		stmts, err := session.Parse(sctx, sql)
 		c.Assert(err, IsNil, Commentf("error %v, for expr %s", err, tt.exprStr))
 		c.Assert(stmts, HasLen, 1)
-		is := domain.GetDomain(sctx).InfoSchema()
-		err = plannercore.Preprocess(sctx, stmts[0], is)
+		ret := &plannercore.PreprocessorReturn{}
+		err = plannercore.Preprocess(sctx, stmts[0], plannercore.WithPreprocessorReturn(ret))
 		c.Assert(err, IsNil, Commentf("error %v, for resolve name, expr %s", err, tt.exprStr))
-		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], is)
+		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], ret.InfoSchema)
 		c.Assert(err, IsNil, Commentf("error %v, for build plan, expr %s", err, tt.exprStr))
 		selection := p.(plannercore.LogicalPlan).Children()[0].(*plannercore.LogicalSelection)
 		conds := make([]expression.Expression, len(selection.Conditions))
@@ -648,10 +648,10 @@ create table t(
 		stmts, err := session.Parse(sctx, sql)
 		c.Assert(err, IsNil, Commentf("error %v, for expr %s", err, tt.exprStr))
 		c.Assert(stmts, HasLen, 1)
-		is := domain.GetDomain(sctx).InfoSchema()
-		err = plannercore.Preprocess(sctx, stmts[0], is)
+		ret := &plannercore.PreprocessorReturn{}
+		err = plannercore.Preprocess(sctx, stmts[0], plannercore.WithPreprocessorReturn(ret))
 		c.Assert(err, IsNil, Commentf("error %v, for resolve name, expr %s", err, tt.exprStr))
-		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], is)
+		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], ret.InfoSchema)
 		c.Assert(err, IsNil, Commentf("error %v, for build plan, expr %s", err, tt.exprStr))
 		selection := p.(plannercore.LogicalPlan).Children()[0].(*plannercore.LogicalSelection)
 		tbl := selection.Children()[0].(*plannercore.DataSource).TableInfo()
@@ -839,10 +839,10 @@ create table t(
 		stmts, err := session.Parse(sctx, sql)
 		c.Assert(err, IsNil, Commentf("error %v, for expr %s", err, tt.exprStr))
 		c.Assert(stmts, HasLen, 1)
-		is := domain.GetDomain(sctx).InfoSchema()
-		err = plannercore.Preprocess(sctx, stmts[0], is)
+		ret := &plannercore.PreprocessorReturn{}
+		err = plannercore.Preprocess(sctx, stmts[0], plannercore.WithPreprocessorReturn(ret))
 		c.Assert(err, IsNil, Commentf("error %v, for resolve name, expr %s", err, tt.exprStr))
-		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], is)
+		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], ret.InfoSchema)
 		c.Assert(err, IsNil, Commentf("error %v, for build plan, expr %s", err, tt.exprStr))
 		selection := p.(plannercore.LogicalPlan).Children()[0].(*plannercore.LogicalSelection)
 		tbl := selection.Children()[0].(*plannercore.DataSource).TableInfo()
@@ -1203,10 +1203,10 @@ func (s *testRangerSuite) TestColumnRange(c *C) {
 		stmts, err := session.Parse(sctx, sql)
 		c.Assert(err, IsNil, Commentf("error %v, for expr %s", err, tt.exprStr))
 		c.Assert(stmts, HasLen, 1)
-		is := domain.GetDomain(sctx).InfoSchema()
-		err = plannercore.Preprocess(sctx, stmts[0], is)
+		ret := &plannercore.PreprocessorReturn{}
+		err = plannercore.Preprocess(sctx, stmts[0], plannercore.WithPreprocessorReturn(ret))
 		c.Assert(err, IsNil, Commentf("error %v, for resolve name, expr %s", err, tt.exprStr))
-		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], is)
+		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], ret.InfoSchema)
 		c.Assert(err, IsNil, Commentf("error %v, for build plan, expr %s", err, tt.exprStr))
 		sel := p.(plannercore.LogicalPlan).Children()[0].(*plannercore.LogicalSelection)
 		ds, ok := sel.Children()[0].(*plannercore.DataSource)
@@ -1627,10 +1627,10 @@ func (s *testRangerSuite) TestIndexRangeForYear(c *C) {
 		stmts, err := session.Parse(sctx, sql)
 		c.Assert(err, IsNil, Commentf("error %v, for expr %s", err, tt.exprStr))
 		c.Assert(stmts, HasLen, 1)
-		is := domain.GetDomain(sctx).InfoSchema()
-		err = plannercore.Preprocess(sctx, stmts[0], is)
+		ret := &plannercore.PreprocessorReturn{}
+		err = plannercore.Preprocess(sctx, stmts[0], plannercore.WithPreprocessorReturn(ret))
 		c.Assert(err, IsNil, Commentf("error %v, for resolve name, expr %s", err, tt.exprStr))
-		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], is)
+		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], ret.InfoSchema)
 		c.Assert(err, IsNil, Commentf("error %v, for build plan, expr %s", err, tt.exprStr))
 		selection := p.(plannercore.LogicalPlan).Children()[0].(*plannercore.LogicalSelection)
 		tbl := selection.Children()[0].(*plannercore.DataSource).TableInfo()
@@ -1698,10 +1698,10 @@ func (s *testRangerSuite) TestPrefixIndexRangeScan(c *C) {
 		stmts, err := session.Parse(sctx, sql)
 		c.Assert(err, IsNil, Commentf("error %v, for expr %s", err, tt.exprStr))
 		c.Assert(stmts, HasLen, 1)
-		is := domain.GetDomain(sctx).InfoSchema()
-		err = plannercore.Preprocess(sctx, stmts[0], is)
+		ret := &plannercore.PreprocessorReturn{}
+		err = plannercore.Preprocess(sctx, stmts[0], plannercore.WithPreprocessorReturn(ret))
 		c.Assert(err, IsNil, Commentf("error %v, for resolve name, expr %s", err, tt.exprStr))
-		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], is)
+		p, _, err := plannercore.BuildLogicalPlan(ctx, sctx, stmts[0], ret.InfoSchema)
 		c.Assert(err, IsNil, Commentf("error %v, for build plan, expr %s", err, tt.exprStr))
 		selection := p.(plannercore.LogicalPlan).Children()[0].(*plannercore.LogicalSelection)
 		tbl := selection.Children()[0].(*plannercore.DataSource).TableInfo()
@@ -1736,6 +1736,44 @@ func (s *testRangerSuite) TestIndexRangeForDecimal(c *C) {
 	testKit.MustExec("insert into t1 values(0),(null);")
 	testKit.MustExec("create table t2(a int, b decimal unsigned, key idx(a,b));")
 	testKit.MustExec("insert into t2 values(1,0),(1,null);")
+
+	var input []string
+	var output []struct {
+		SQL    string
+		Plan   []string
+		Result []string
+	}
+	s.testData.GetTestCases(c, &input, &output)
+	for i, tt := range input {
+		s.testData.OnRecord(func() {
+			output[i].SQL = tt
+			output[i].Plan = s.testData.ConvertRowsToStrings(testKit.MustQuery("explain format = 'brief' " + tt).Rows())
+			output[i].Result = s.testData.ConvertRowsToStrings(testKit.MustQuery(tt).Rows())
+		})
+		testKit.MustQuery("explain format = 'brief' " + tt).Check(testkit.Rows(output[i].Plan...))
+		testKit.MustQuery(tt).Check(testkit.Rows(output[i].Result...))
+	}
+}
+
+func (s *testRangerSuite) TestPrefixIndexAppendPointRanges(c *C) {
+	defer testleak.AfterTest(c)()
+	dom, store, err := newDomainStoreWithBootstrap(c)
+	defer func() {
+		dom.Close()
+		store.Close()
+	}()
+	c.Assert(err, IsNil)
+	testKit := testkit.NewTestKit(c, store)
+	testKit.MustExec("USE test")
+	testKit.MustExec("DROP TABLE IF EXISTS IDT_20755")
+	testKit.MustExec("CREATE TABLE `IDT_20755` (\n" +
+		"  `COL1` varchar(20) DEFAULT NULL,\n" +
+		"  `COL2` tinyint(16) DEFAULT NULL,\n" +
+		"  `COL3` timestamp NULL DEFAULT NULL,\n" +
+		"  KEY `u_m_col` (`COL1`(10),`COL2`,`COL3`)\n" +
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
+	testKit.MustExec("INSERT INTO IDT_20755 VALUES(\"牾窓螎刳闌蜹瑦詬鍖湪槢壿玟瞏膍敗特森撇縆\", 73, \"2010-06-03 07:29:05\")")
+	testKit.MustExec("INSERT INTO IDT_20755 VALUES(\"xxxxxxxxxxxxxxx\", 73, \"2010-06-03 07:29:05\")")
 
 	var input []string
 	var output []struct {
